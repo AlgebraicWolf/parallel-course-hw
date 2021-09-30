@@ -1,8 +1,17 @@
 #include <mpi.h>
 
+#include <inttypes.h>
 #include <chrono>
 #include <cstdio>
-#include <tuple>
+#include <cstdlib>
+
+#ifdef DEBUG
+#define DEBUG_LOG(...) printf(__VA_ARGS__)
+#define RELEASE_LOG(...) do {} while(false)
+#else
+#define DEBUG_LOG(...) do {} while(false)
+#define RELEASE_LOG(...) printf(__VA_ARGS__)
+#endif
 
 double F(double x) __attribute__((const));
 
@@ -18,7 +27,7 @@ int main(int argc, char *argv[]) {
 
     if (argc < 2) {
         if (id == 0) {
-            printf(
+            DEBUG_LOG(
                 "Provide number of partitions. Example:\n\t"
                 "./integrate 10  # "
                 "Calculate integral using partition of [0, 1] into 10 parts.\n");
@@ -28,7 +37,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    int N = atoi(argv[1]);  // Get number of pieces in partition
+    int N = std::atoi(argv[1]);  // Get number of pieces in partition
     double step = 1.0 / N;
     int steps_per_process = N / p;
 
@@ -54,7 +63,7 @@ int main(int argc, char *argv[]) {
     MPI_Barrier(MPI_COMM_WORLD);  // Start from here
     
     double result = integrate(a, step, steps_per_process);
-    printf("Integral calculated by process %d on [%lf, %lf]: %.12lf\n", id, a, a + step * steps_per_process, result);
+    DEBUG_LOG("Integral calculated by process %d on [%lf, %lf]: %.12lf\n", id, a, a + step * steps_per_process, result);
 
     double parallel_integral = 0;
     MPI_Reduce(&result, &parallel_integral, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -63,8 +72,12 @@ int main(int argc, char *argv[]) {
         auto end_parallel = std::chrono::high_resolution_clock::now();
         parallel_duration = std::chrono::duration_cast<std::chrono::microseconds>(end_parallel - start_parallel).count();
 
-        printf("Integral computed by single process: %.12lf. Computations took %lf s\n", single_integral, single_duration * 0.000001);
-        printf("Integral computed by %d processes: %.12lf. Computations took %lf s\n", p, parallel_integral, parallel_duration * 0.000001);
+        DEBUG_LOG("Integral computed by single process: %.12lf. Computations took %lf s\n", single_integral, single_duration * 0.000001);
+        DEBUG_LOG("Integral computed by %d processes: %.12lf. Computations took %lf s\n", p, parallel_integral, parallel_duration * 0.000001);
+        DEBUG_LOG("Speedup is x%lf\n", static_cast<double>(single_duration) / parallel_duration);
+
+        DEBUG_LOG("%" PRId64 " %" PRId64 "\n", single_duration, parallel_duration);
+        RELEASE_LOG("%" PRId64 " %" PRId64 "\n", single_duration, parallel_duration);
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
